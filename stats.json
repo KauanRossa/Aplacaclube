@@ -1,7 +1,8 @@
 {
   "club_name_searched": "Aplaca",
   "platform": "common-gen5",
-  "updated_at": "2026-09-13T00:44:40.384165+00:00",
+  "updated_at": "2026-09-13T00:48:42.964707+00:00",
   "found": false,
-  "error": "Clube nao encontrado. Confira se CLUB_NAME esta escrito exatamente igual ao nome do clube dentro do jogo, e se PLATFORM esta certo."
+  "error": "Clube nao encontrado. Confira se CLUB_NAME esta escrito exatamente igual ao nome do clube dentro do jogo, e se PLATFORM esta certo.",
+  "debug_search_raw": null
 }
