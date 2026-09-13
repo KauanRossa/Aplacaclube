@@ -19,9 +19,11 @@ jobs:
           python-version: "3.12"
 
       - name: Instalar dependencias
-        run: pip install requests
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
 
-      - name: Buscar estatisticas na EA
+      - name: Buscar estatisticas na EA (via navegador de verdade)
         run: python fetch_stats.py
 
       - name: Commitar stats.json atualizado
