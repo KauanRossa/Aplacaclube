@@ -1,51 +1,62 @@
 """
 Busca as estatisticas do clube no Pro Clubs (EA Sports FC) e salva em stats.json.
 
-Este script roda dentro do GitHub Actions (veja .github/workflows/update-stats.yml),
-nao no navegador -- e por isso ele consegue falar com a API da EA sem ser bloqueado.
+Por que via navegador de verdade (Playwright) e nao so "requests"?
+A EA esconde a API atras da Akamai, que bloqueia (403 Access Denied) chamadas
+HTTP que nao tenham a "impressao digital" de um navegador real (TLS, JS, etc).
+Um script Python comum, mesmo copiando os cabecalhos de um Chrome, ainda e
+identificado e barrado. Um Chromium de verdade (headless) passa por isso porque
+e, literalmente, um navegador de verdade fazendo a chamada.
 
 CONFIGURE AQUI EMBAIXO o nome exato do clube (igual esta dentro do jogo) e a plataforma.
 """
 
 import json
-import sys
 from datetime import datetime, timezone
 
-import requests
+from playwright.sync_api import sync_playwright
 
 # ---------------- CONFIGURE AQUI ----------------
-CLUB_NAME = "Aplaca Clube"     # nome EXATO do clube dentro do jogo
-PLATFORM = "common-gen5"       # common-gen5 = PS5 / Xbox Series X|S / PC
-                                # (se o time joga no PS4/Xbox One, troque para "common-gen4")
+CLUB_NAME = "Aplaca"      # nome EXATO do clube dentro do jogo
+PLATFORM = "common-gen5"  # common-gen5 = PS5 / Xbox Series X|S / PC
+                           # (se o time joga no PS4/Xbox One, troque para "common-gen4")
 # -------------------------------------------------
 
 BASE = "https://proclubs.ea.com/api/fc"
 
-HEADERS = {
-    "accept": "application/json",
-    "accept-language": "en-US,en;q=0.9",
-    "sec-ch-ua": '"Google Chrome";v="141", "Not?A_Brand";v="8", "Chromium";v="141"',
-    "sec-fetch-site": "same-origin",
-    "user-agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
-    ),
-}
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+)
+
+FETCH_JS = """
+    async (url) => {
+        try {
+            const res = await fetch(url, { headers: { 'accept': 'application/json' } });
+            const text = await res.text();
+            return { ok: res.ok, status: res.status, text: text };
+        } catch (e) {
+            return { ok: false, status: 0, text: String(e) };
+        }
+    }
+"""
 
 
-def get(url, params, label):
-    """GET defensivo: nunca derruba o script, so avisa no log e segue.
-    Retorna (dados_json_ou_None, info_de_debug)."""
-    debug = {"url": url, "params": params}
+def fetch_json(page, url, label):
+    """Roda um fetch() de dentro da pagina ja carregada (mesma origem da EA).
+    Retorna (dados_ou_None, debug)."""
+    out = page.evaluate(FETCH_JS, url)
+    debug = {"url": url, "status": out.get("status")}
+    if not out.get("ok"):
+        debug["body"] = (out.get("text") or "")[:800]
+        print(f"[aviso] {label} falhou: status {out.get('status')}")
+        return None, debug
     try:
-        r = requests.get(url, headers=HEADERS, params=params, timeout=15)
-        debug["status_code"] = r.status_code
-        debug["response_text"] = r.text[:800]
-        r.raise_for_status()
-        return r.json(), debug
+        return json.loads(out["text"]), debug
     except Exception as e:
-        debug["exception"] = str(e)
-        print(f"[aviso] {label} falhou: {e}", file=sys.stderr)
+        debug["parse_error"] = str(e)
+        debug["body"] = (out.get("text") or "")[:800]
+        print(f"[aviso] {label} veio com corpo que nao e JSON: {e}")
         return None, debug
 
 
@@ -71,60 +82,70 @@ def main():
         "found": False,
     }
 
-    search, search_debug = get(
-        f"{BASE}/allTimeLeaderboard/search",
-        {"platform": PLATFORM, "clubName": CLUB_NAME},
-        "busca do clube",
-    )
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page(user_agent=USER_AGENT)
 
-    club_id, club_info = extract_club_id(search)
+        # Carrega o site de verdade primeiro -- isso deixa a Akamai ver uma
+        # visita "normal" e da tempo pra qualquer cookie/checagem dela rodar,
+        # antes da gente chamar a API de dentro dessa mesma pagina.
+        try:
+            page.goto("https://proclubs.ea.com/", wait_until="networkidle", timeout=30000)
+        except Exception as e:
+            result["error"] = f"Nao consegui nem abrir o proclubs.ea.com: {e}"
+            browser.close()
+            write(result)
+            return
 
-    if not club_id:
-        result["error"] = (
-            "Clube nao encontrado. Confira se CLUB_NAME esta escrito exatamente "
-            "igual ao nome do clube dentro do jogo, e se PLATFORM esta certo."
+        search_url = f"{BASE}/allTimeLeaderboard/search?platform={PLATFORM}&clubName={CLUB_NAME}"
+        search, search_debug = fetch_json(page, search_url, "busca do clube")
+
+        club_id, club_info = extract_club_id(search)
+
+        if not club_id:
+            result["error"] = (
+                "Clube nao encontrado (ou a EA ainda bloqueou a chamada). "
+                "Veja debug_search_http pra saber qual dos dois foi."
+            )
+            result["debug_search_raw"] = search
+            result["debug_search_http"] = search_debug
+            browser.close()
+            write(result)
+            return
+
+        result["found"] = True
+        result["club_id"] = club_id
+        result["club_info"] = club_info
+
+        overall, _ = fetch_json(
+            page, f"{BASE}/clubs/overallStats?platform={PLATFORM}&clubIds={club_id}", "estatisticas gerais"
         )
-        # guarda a resposta crua da EA (e os detalhes da requisicao) pra debugar
-        result["debug_search_raw"] = search
-        result["debug_search_http"] = search_debug
-        write(result)
-        return
+        if overall:
+            result["overall_stats"] = overall
 
-    result["found"] = True
-    result["club_id"] = club_id
-    result["club_info"] = club_info
+        details, _ = fetch_json(
+            page, f"{BASE}/clubs/info?platform={PLATFORM}&clubIds={club_id}", "detalhes do clube"
+        )
+        if details:
+            result["club_details"] = details
 
-    overall, _ = get(
-        f"{BASE}/clubs/overallStats",
-        {"platform": PLATFORM, "clubIds": club_id},
-        "estatisticas gerais",
-    )
-    if overall:
-        result["overall_stats"] = overall
+        league_matches, _ = fetch_json(
+            page,
+            f"{BASE}/clubs/matches?platform={PLATFORM}&clubIds={club_id}&matchType=leagueMatch&maxResultCount=10",
+            "partidas de liga",
+        )
+        if league_matches:
+            result["league_matches"] = league_matches
 
-    details, _ = get(
-        f"{BASE}/clubs/info",
-        {"platform": PLATFORM, "clubIds": club_id},
-        "detalhes do clube",
-    )
-    if details:
-        result["club_details"] = details
+        friendly_matches, _ = fetch_json(
+            page,
+            f"{BASE}/clubs/matches?platform={PLATFORM}&clubIds={club_id}&matchType=friendlyMatch&maxResultCount=10",
+            "partidas amistosas",
+        )
+        if friendly_matches:
+            result["friendly_matches"] = friendly_matches
 
-    league_matches, _ = get(
-        f"{BASE}/clubs/matches",
-        {"platform": PLATFORM, "clubIds": club_id, "matchType": "leagueMatch", "maxResultCount": 10},
-        "partidas de liga",
-    )
-    if league_matches:
-        result["league_matches"] = league_matches
-
-    friendly_matches, _ = get(
-        f"{BASE}/clubs/matches",
-        {"platform": PLATFORM, "clubIds": club_id, "matchType": "friendlyMatch", "maxResultCount": 10},
-        "partidas amistosas",
-    )
-    if friendly_matches:
-        result["friendly_matches"] = friendly_matches
+        browser.close()
 
     write(result)
 
