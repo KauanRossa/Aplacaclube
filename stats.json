@@ -1,18 +1,13 @@
 {
-  "club_name_searched": "Aplaca Clube",
+  "club_name_searched": "Aplaca",
   "platform": "common-gen5",
-  "updated_at": "2026-09-13T00:53:31.121578+00:00",
+  "updated_at": "2026-09-13T01:00:49.483890+00:00",
   "found": false,
-  "error": "Clube nao encontrado. Confira se CLUB_NAME esta escrito exatamente igual ao nome do clube dentro do jogo, e se PLATFORM esta certo.",
+  "error": "Clube nao encontrado (ou a EA ainda bloqueou a chamada). Veja debug_search_http pra saber qual dos dois foi.",
   "debug_search_raw": null,
   "debug_search_http": {
-    "url": "https://proclubs.ea.com/api/fc/allTimeLeaderboard/search",
-    "params": {
-      "platform": "common-gen5",
-      "clubName": "Aplaca Clube"
-    },
-    "status_code": 403,
-    "response_text": "<HTML><HEAD>\n<TITLE>Access Denied</TITLE>\n</HEAD><BODY>\n<H1>Access Denied</H1>\n \nYou don't have permission to access \"http&#58;&#47;&#47;proclubs&#46;ea&#46;com&#47;api&#47;fc&#47;allTimeLeaderboard&#47;search&#63;\" on this server.<P>\nReference&#32;&#35;18&#46;e418d017&#46;1789260811&#46;257c078c\n<P>https&#58;&#47;&#47;errors&#46;edgesuite&#46;net&#47;18&#46;e418d017&#46;1789260811&#46;257c078c</P>\n</BODY>\n</HTML>\n",
-    "exception": "403 Client Error: Forbidden for url: https://proclubs.ea.com/api/fc/allTimeLeaderboard/search?platform=common-gen5&clubName=Aplaca+Clube"
+    "url": "https://proclubs.ea.com/api/fc/allTimeLeaderboard/search?platform=common-gen5&clubName=Aplaca",
+    "status": 0,
+    "body": "TypeError: Failed to fetch"
   }
 }
