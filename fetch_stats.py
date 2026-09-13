@@ -79,6 +79,8 @@ def main():
             "Clube nao encontrado. Confira se CLUB_NAME esta escrito exatamente "
             "igual ao nome do clube dentro do jogo, e se PLATFORM esta certo."
         )
+        # guarda a resposta crua da EA pra dar pra debugar o que realmente voltou
+        result["debug_search_raw"] = search
         write(result)
         return
 
