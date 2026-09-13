@@ -97,6 +97,10 @@ def main():
             write(result)
             return
 
+        # debug: pra onde a pagina realmente foi (pode ter redirecionado)
+        result["debug_landed_url"] = page.url
+        result["debug_page_title"] = page.title()
+
         search_url = f"{BASE}/allTimeLeaderboard/search?platform={PLATFORM}&clubName={CLUB_NAME}"
         search, search_debug = fetch_json(page, search_url, "busca do clube")
 
