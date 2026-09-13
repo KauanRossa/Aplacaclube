@@ -1,8 +1,10 @@
 {
   "club_name_searched": "Aplaca",
   "platform": "common-gen5",
-  "updated_at": "2026-09-13T01:00:49.483890+00:00",
+  "updated_at": "2026-09-13T01:05:46.085133+00:00",
   "found": false,
+  "debug_landed_url": "https://proclubs.ea.com/",
+  "debug_page_title": "Welcome",
   "error": "Clube nao encontrado (ou a EA ainda bloqueou a chamada). Veja debug_search_http pra saber qual dos dois foi.",
   "debug_search_raw": null,
   "debug_search_http": {
