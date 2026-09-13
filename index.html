@@ -608,6 +608,75 @@
   .bench-card .nm{font-weight:700; font-size:0.9rem;}
   .bench-card .ps{font-size:0.72rem; color:var(--chalk);}
 
+  /* ---------- estatisticas ---------- */
+  .stats-loading, .stats-empty{
+    color:var(--chalk);
+    font-size:0.92rem;
+  }
+  .stats-empty{
+    border:1px dashed rgba(127,142,163,0.5);
+    border-radius:6px;
+    padding:16px 18px;
+    line-height:1.6;
+  }
+  .stats-summary{
+    display:flex;
+    flex-wrap:wrap;
+    gap:clamp(16px,4vw,40px);
+    margin-bottom:32px;
+  }
+  .stats-summary .stat-box{text-align:center;}
+  .stats-summary .stat-box .n{
+    font-family:'Anton',sans-serif;
+    font-size:2rem;
+    color:var(--paper);
+    display:block;
+  }
+  .stats-summary .stat-box .l{
+    font-size:0.72rem;
+    letter-spacing:0.08em;
+    color:var(--chalk);
+    text-transform:uppercase;
+  }
+  .match-list{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .match-row{
+    display:grid;
+    grid-template-columns:40px 70px 1fr auto;
+    align-items:center;
+    gap:14px;
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:10px 16px;
+    background:rgba(238,233,223,0.03);
+    font-size:0.9rem;
+  }
+  .match-badge{
+    width:28px;
+    height:28px;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:'Anton',sans-serif;
+    font-size:0.85rem;
+    color:#06090f;
+  }
+  .match-badge.win{background:#3ea56b;}
+  .match-badge.draw{background:var(--chalk);}
+  .match-badge.loss{background:var(--red);}
+  .match-score{font-family:'Anton',sans-serif; font-size:1.05rem;}
+  .match-opp{color:rgba(238,233,223,0.82);}
+  .match-date{color:var(--chalk); font-size:0.78rem;}
+  .stats-updated{
+    margin-top:18px;
+    font-size:0.78rem;
+    color:var(--chalk);
+  }
+
   /* ---------- titulos ---------- */
   .trophy-grid{
     display:grid;
@@ -759,6 +828,7 @@
       <li><a href="#historia">História</a></li>
       <li><a href="#elenco">Elenco</a></li>
       <li><a href="#formacao">Escalação</a></li>
+      <li><a href="#estatisticas">Estatísticas</a></li>
       <li><a href="#titulos">Títulos</a></li>
       <li><a href="#curiosidades">Curiosidades</a></li>
     </ul>
@@ -893,13 +963,27 @@
   </div>
 </section>
 
+<section id="estatisticas">
+  <div class="section-head">
+    <div>
+      <h2>Estatísticas</h2>
+      <p class="section-kicker">Direto da EA — atualizado automaticamente pelo GitHub Actions a cada 6 horas.</p>
+    </div>
+    <span class="num">04</span>
+  </div>
+
+  <div id="statsContent">
+    <p class="stats-loading">Carregando estatísticas…</p>
+  </div>
+</section>
+
 <section id="titulos">
   <div class="section-head">
     <div>
       <h2>Títulos</h2>
       <p class="section-kicker">A vitrine é modesta, o orgulho é gigante.</p>
     </div>
-    <span class="num">04</span>
+    <span class="num">05</span>
   </div>
 
   <div class="trophy-grid">
@@ -939,7 +1023,7 @@
       <h2>Curiosidades</h2>
       <p class="section-kicker">Bastidores do Aplaca que não estão em nenhuma súmula.</p>
     </div>
-    <span class="num">05</span>
+    <span class="num">06</span>
   </div>
 
   <div class="facts-grid">
@@ -1188,6 +1272,104 @@
       requestAnimationFrame(loop);
     }
     loop();
+  })();
+
+  // ---------- estatisticas do Pro Clubs (le o stats.json gerado pelo GitHub Actions) ----------
+  (function loadStats(){
+    const el = document.getElementById('statsContent');
+
+    fetch('./stats.json', { cache: 'no-store' })
+      .then(r => {
+        if (!r.ok) throw new Error('stats.json ainda não existe');
+        return r.json();
+      })
+      .then(renderStats)
+      .catch(() => {
+        el.innerHTML = `<p class="stats-empty">Ainda não consegui buscar as estatísticas ao vivo por aqui.
+          Se o GitHub Actions já está configurado, vai em <strong>Actions → Update Pro Clubs Stats → Run workflow</strong>
+          pra gerar o primeiro stats.json.</p>`;
+      });
+
+    function renderStats(data){
+      if (!data || !data.found) {
+        el.innerHTML = `<p class="stats-empty">${(data && data.error) || 'Clube ainda não encontrado na busca da EA.'}</p>`;
+        return;
+      }
+
+      const clubId = String(data.club_id);
+      const matches = [].concat(data.league_matches || [], data.friendly_matches || []);
+
+      let w = 0, d = 0, l = 0, gf = 0, ga = 0;
+      const rows = [];
+
+      matches.forEach(m => {
+        const clubsObj = m.clubs || {};
+        const ids = Object.keys(clubsObj);
+        if (ids.length < 2) return;
+        const usId = ids.find(id => String(id) === clubId) || ids[0];
+        const oppId = ids.find(id => id !== usId) || ids[1];
+        const us = clubsObj[usId] || {};
+        const opp = clubsObj[oppId] || {};
+        const usGoals = Number(us.goals ?? us.score ?? 0);
+        const oppGoals = Number(opp.goals ?? opp.score ?? 0);
+
+        let outcome = 'E';
+        if (usGoals > oppGoals) { w++; outcome = 'V'; }
+        else if (usGoals < oppGoals) { l++; outcome = 'D'; }
+        else { d++; }
+        gf += usGoals;
+        ga += oppGoals;
+
+        const oppName = (opp.details && opp.details.name) || opp.clubName || 'Adversário';
+        const ts = Number(m.timestamp) * 1000;
+        const dateStr = ts ? new Date(ts).toLocaleDateString('pt-BR') : '';
+        rows.push({ outcome, usGoals, oppGoals, oppName, dateStr, ts: ts || 0 });
+      });
+
+      rows.sort((a, b) => b.ts - a.ts);
+
+      const summaryHtml = `
+        <div class="stats-summary reveal">
+          <div class="stat-box"><span class="n">${w}</span><span class="l">Vitórias</span></div>
+          <div class="stat-box"><span class="n">${d}</span><span class="l">Empates</span></div>
+          <div class="stat-box"><span class="n">${l}</span><span class="l">Derrotas</span></div>
+          <div class="stat-box"><span class="n">${gf}</span><span class="l">Gols pró</span></div>
+          <div class="stat-box"><span class="n">${ga}</span><span class="l">Gols contra</span></div>
+        </div>
+      `;
+
+      const matchesHtml = rows.length
+        ? `<div class="match-list">${rows.map((r, i) => `
+            <div class="match-row reveal" style="transition-delay:${Math.min(i, 6) * 60}ms">
+              <span class="match-badge ${r.outcome === 'V' ? 'win' : r.outcome === 'D' ? 'loss' : 'draw'}">${r.outcome}</span>
+              <span class="match-score">${r.usGoals} x ${r.oppGoals}</span>
+              <span class="match-opp">${r.oppName}</span>
+              <span class="match-date">${r.dateStr}</span>
+            </div>
+          `).join('')}</div>`
+        : '<p class="stats-empty">Ainda sem partidas registradas.</p>';
+
+      const updated = data.updated_at ? new Date(data.updated_at).toLocaleString('pt-BR') : '';
+
+      el.innerHTML = summaryHtml + matchesHtml + (updated ? `<p class="stats-updated">Atualizado em ${updated}</p>` : '');
+
+      // plugar no mesmo sistema de scroll-reveal do resto do site
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const newReveals = el.querySelectorAll('.reveal');
+      if (reduceMotion) {
+        newReveals.forEach(node => node.classList.add('in-view'));
+      } else {
+        const io = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('in-view');
+              io.unobserve(entry.target);
+            }
+          });
+        }, { threshold: 0.12, rootMargin: '0px 0px -60px 0px' });
+        newReveals.forEach(node => io.observe(node));
+      }
+    }
   })();
 </script>
 
