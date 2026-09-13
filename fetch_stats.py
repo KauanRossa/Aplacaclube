@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 import requests
 
 # ---------------- CONFIGURE AQUI ----------------
-CLUB_NAME = "Aplaca"     # nome EXATO do clube dentro do jogo
+CLUB_NAME = "Aplaca Clube"     # nome EXATO do clube dentro do jogo
 PLATFORM = "common-gen5"       # common-gen5 = PS5 / Xbox Series X|S / PC
                                 # (se o time joga no PS4/Xbox One, troque para "common-gen4")
 # -------------------------------------------------
@@ -34,14 +34,19 @@ HEADERS = {
 
 
 def get(url, params, label):
-    """GET defensivo: nunca derruba o script, so avisa no log e segue."""
+    """GET defensivo: nunca derruba o script, so avisa no log e segue.
+    Retorna (dados_json_ou_None, info_de_debug)."""
+    debug = {"url": url, "params": params}
     try:
         r = requests.get(url, headers=HEADERS, params=params, timeout=15)
+        debug["status_code"] = r.status_code
+        debug["response_text"] = r.text[:800]
         r.raise_for_status()
-        return r.json()
+        return r.json(), debug
     except Exception as e:
+        debug["exception"] = str(e)
         print(f"[aviso] {label} falhou: {e}", file=sys.stderr)
-        return None
+        return None, debug
 
 
 def extract_club_id(search_result):
@@ -66,7 +71,7 @@ def main():
         "found": False,
     }
 
-    search = get(
+    search, search_debug = get(
         f"{BASE}/allTimeLeaderboard/search",
         {"platform": PLATFORM, "clubName": CLUB_NAME},
         "busca do clube",
@@ -79,8 +84,9 @@ def main():
             "Clube nao encontrado. Confira se CLUB_NAME esta escrito exatamente "
             "igual ao nome do clube dentro do jogo, e se PLATFORM esta certo."
         )
-        # guarda a resposta crua da EA pra dar pra debugar o que realmente voltou
+        # guarda a resposta crua da EA (e os detalhes da requisicao) pra debugar
         result["debug_search_raw"] = search
+        result["debug_search_http"] = search_debug
         write(result)
         return
 
@@ -88,7 +94,7 @@ def main():
     result["club_id"] = club_id
     result["club_info"] = club_info
 
-    overall = get(
+    overall, _ = get(
         f"{BASE}/clubs/overallStats",
         {"platform": PLATFORM, "clubIds": club_id},
         "estatisticas gerais",
@@ -96,7 +102,7 @@ def main():
     if overall:
         result["overall_stats"] = overall
 
-    details = get(
+    details, _ = get(
         f"{BASE}/clubs/info",
         {"platform": PLATFORM, "clubIds": club_id},
         "detalhes do clube",
@@ -104,7 +110,7 @@ def main():
     if details:
         result["club_details"] = details
 
-    league_matches = get(
+    league_matches, _ = get(
         f"{BASE}/clubs/matches",
         {"platform": PLATFORM, "clubIds": club_id, "matchType": "leagueMatch", "maxResultCount": 10},
         "partidas de liga",
@@ -112,7 +118,7 @@ def main():
     if league_matches:
         result["league_matches"] = league_matches
 
-    friendly_matches = get(
+    friendly_matches, _ = get(
         f"{BASE}/clubs/matches",
         {"platform": PLATFORM, "clubIds": club_id, "matchType": "friendlyMatch", "maxResultCount": 10},
         "partidas amistosas",
